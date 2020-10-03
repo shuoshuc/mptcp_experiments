@@ -112,7 +112,7 @@ int mptcp_client(std::string ip_addr) {
 // over.
 int mptcp_server() {
   // Opens a socket for IPv4 Multipath TCP.
-  int sfd = socket(AF_INET6, SOCK_STREAM, IPPROTO_MPTCP);
+  int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_MPTCP);
   if (sfd < 0) {
     printErrorAndExit("mptcp_server socket");
   }
