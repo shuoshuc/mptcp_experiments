@@ -65,6 +65,10 @@ void receiveFromClient(int conn) {
     if (nbytes < 0) {
       printErrorAndExit("mptcp_server read()");
     }
+    if (nbytes == 0) {
+      std::cout << "client side closed connection." << std::endl;
+      return;
+    }
     auto now =
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout << ctime(&now) << ": mptcp_server received " << nbytes
