@@ -119,7 +119,7 @@ First, we need to start tcpdump on VM-2 to capture the MPTCP packets for offline
 $ sudo tcpdump -i enp0s8 tcp and net 20.20.20.0/24 -w mptcp.pcap
 ```
 
-Then, in 2 separate tabs, one for each VM, we start the program.
+Then, in 2 separate tabs, one for each VM, we start the program. The client will send chunks of data (1024 bytes per chunk) to the server with 1 second interval.
 ```bash
 $ ./mptcp_app server  # <-- on VM-2
 $ ./mptcp_app client 20.20.20.20  # <-- on VM-1
