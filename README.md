@@ -27,7 +27,7 @@ We will be using 5.8.13 mainline kernel for the experiment since it contains MPT
 
 First, some preparation needs to be done: install building environment.
 
-> $ sudo apt-get install build-essential libncurses-dev bison flex libssl-dev libelf-dev gdebi
+> $ sudo apt install build-essential libncurses-dev bison flex libssl-dev libelf-dev gdebi
 
 5.8 kernel requires pahole (dwarves) version >= 1.16 but the one provided by Ubuntu 20.04 is only 1.15. So we need to download a higher version from Ubuntu 20.10 repo. (There is no compatibility issue.)
 
@@ -60,3 +60,46 @@ In the menu, follow _Networking support -> Networking Options -> MPTCP: Multipat
 > $ sudo make install
 
 Reboot both VMs, they should be running a 5.8.13 kernel.
+
+## [Step 4] Configure VM IPs.
+As mentioned in **[Step 1]**, the NICs connected to _vboxnet1_ need to be assigned IP addresses. The 2 NICs of VM-1 are assigned **20.20.20.10** and **20.20.20.11**. The only NIC of VM-2 is assigned **20.20.20.20**. Below are the commands to set them.
+
+> $ sudo vi /etc/netplan/00-installer-config.yaml
+
+Note that the fresh-installed VMs should only have one _yaml_ config under _/etc/netplan/_, but it could have a different name. For VM-1, open the file and specify the interface IPs like this. _enp0s8_ and _enp0s9_ are the two NICs.
+
+```
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    enp0s3:
+      dhcp4: true
+    enp0s8:
+      dhcp4: false
+      addresses: [20.20.20.10/24]
+      gateway4: 20.20.20.1
+    enp0s9:
+      dhcp4: false
+      addresses: [20.20.20.11/24]
+      gateway4: 20.20.20.1
+  version: 2
+```
+
+For VM-2, the config looks like this. _enp0s8_ is the NIC.
+
+```
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    enp0s3:
+      dhcp4: true
+    enp0s8:
+      dhcp4: false
+      addresses: [20.20.20.20/24]
+      gateway4: 20.20.20.1
+  version: 2
+```
+
+Save on exit and then run this command to apply the changes immediately.
+
+> $ sudo netplan apply
