@@ -8,7 +8,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -65,14 +65,15 @@ void receiveFromClient(int conn) {
     if (nbytes < 0) {
       printErrorAndExit("mptcp_server read()");
     }
+    // 0 means EOF, break out the loop and close server side connection.
     if (nbytes == 0) {
       std::cout << "client side closed connection." << std::endl;
-      return;
+      break;
     }
     auto now =
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::cout << ctime(&now) << ": mptcp_server received " << nbytes
-              << " bytes." << std::endl;
+    std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
+              << ": mptcp_server received " << nbytes << " bytes." << std::endl;
   }
   // Close connection on exit.
   close(conn);
@@ -103,8 +104,8 @@ int mptcp_client(std::string ip_addr) {
     }
     auto now =
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::cout << ctime(&now) << ": mptcp_client sent " << buf.size()
-              << " bytes." << std::endl;
+    std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
+              << ": mptcp_client sent " << buf.size() << " bytes." << std::endl;
     // Sleeps for 1 sec.
     sleep(1);
   }
