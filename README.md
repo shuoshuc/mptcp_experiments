@@ -98,18 +98,52 @@ Save on exit and then run this command to apply the changes immediately.
 $ sudo netplan apply
 ```
 
-## [Step 4] Run experiment.
+## [Step 4] Install iproute2_5.8.
+MPTCP's path management module controls the creation and deletion of subflows. It is an in-kernel module that we cannot directly interact with. Hence we rely on iproute2, a package that provides user space interaction with path management via Netlink API, to control the subflows. MPTCP support only exists in iproute2 version 5.8 and later, but the default version in Ubuntu 20.04 APT is 5.5. We have to manually install a higher version. iproute2_5.8 relies on libselinux_3.1, so we first download and install libselinux.
+```bash
+$ wget http://archive.ubuntu.com/ubuntu/pool/main/libs/libselinux/libselinux1_3.1-2_amd64.deb
+$ sudo gdebi libselinux1_3.1-2_amd64.deb
+$ wget http://ftp.br.debian.org/debian/pool/main/i/iproute2/iproute2_5.8.0-1_amd64.deb  # <-- it is a Debian package but it works fine on Ubuntu.
+$ sudo gdebi iproute2_5.8.0-1_amd64.deb
+```
+
+When installation is complete, run the command to test:
+```bash
+$ ip mptcp help
+Usage:	ip mptcp endpoint add ADDRESS [ dev NAME ] [ id ID ]
+				      [ FLAG-LIST ]
+	ip mptcp endpoint delete id ID
+	ip mptcp endpoint show [ id ID ]
+	ip mptcp endpoint flush
+	ip mptcp limits set [ subflows NR ] [ add_addr_accepted NR ]
+	ip mptcp limits show
+FLAG-LIST := [ FLAG-LIST ] FLAG
+FLAG  := [ signal | subflow | backup ]
+```
+
+## [Step 5] Run experiment.
 We will make use of the server/client application in [this github repo](https://github.com/shuoshuc/mptcp_experiments/blob/main/mptcp_app.cc) for our experiment. Please download the program to both VMs and compile it.
 ```bash
 $ g++ -o mptcp_app mptcp_app.cc
 ```
 
-First, we need to start tcpdump on VM-2 to capture the MPTCP packets for offline analysis. _enp0s8_ is the NIC connected to _vboxnet1_, we filter by tcp and IP range 20.20.20.0/24 since these are of our interest.
+First, VM-1 (client) and VM-2 (server) both should allow 2 subflows for each MPTCP connection so that both paths (20.20.20.10 - 20.20.20.20 and 20.20.20.11 - 20.20.20.20) can be used.
+```bash
+$ sudo ip mptcp limits set subflow 2
+```
+
+Next, on VM-1, we also add both IP addresses as endpoints so that path management module can create subflows for them.
+```bash
+$ sudo ip mptcp endpoint add 20.20.20.10 subflow
+$ sudo ip mptcp endpoint add 20.20.20.11 subflow
+```
+
+Then we need to start tcpdump on VM-2 to capture the MPTCP packets for offline analysis. _enp0s8_ is the NIC connected to _vboxnet1_, we filter by tcp and IP range 20.20.20.0/24 since these are of our interest.
 ```bash
 $ sudo tcpdump -i enp0s8 tcp and net 20.20.20.0/24 -w mptcp.pcap
 ```
 
-Then, in 2 separate tabs, one for each VM, we start the program. The client will send chunks of data (1024 bytes per chunk) to the server with 1 second interval. The client can disconnect and reconnect as long as the server is still running.
+Finally, in 2 separate tabs, one for each VM, we start the program. The client will send chunks of data (1024 bytes per chunk) to the server with 1 second interval. The client can disconnect and reconnect as long as the server is still running.
 ```bash
 $ ./mptcp_app server  # <-- on VM-2
 $ ./mptcp_app client 20.20.20.20  # <-- on VM-1
