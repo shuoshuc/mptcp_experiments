@@ -80,11 +80,9 @@ network:
     enp0s8:
       dhcp4: false
       addresses: [20.20.20.10/24]
-      gateway4: 20.20.20.1
     enp0s9:
       dhcp4: false
       addresses: [20.20.20.11/24]
-      gateway4: 20.20.20.1
   version: 2
 ```
 
@@ -99,7 +97,6 @@ network:
     enp0s8:
       dhcp4: false
       addresses: [20.20.20.20/24]
-      gateway4: 20.20.20.1
   version: 2
 ```
 
