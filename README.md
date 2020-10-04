@@ -6,24 +6,17 @@ To achieve that, there are several steps we need to take, as described below.
 ## [Step 1] Create a 2-VM topology.
 We need a topology that MPTCP can run on. So we create 2 VMs in VirtualBox, VM-1 has 3 NICs and VM-2 has 2 NICs.
 
-For VM-1, 1 NIC is in NAT mode used for Internet connectivity and 2 NICs are in host-only adapter mode connected to _vboxnet1_.
-
-For VM-2, 1 NIC is in NAT mode and the other NIC is in host-only adapter mode also connected to _vboxnet1_.
-
-_vboxnet1_ should have a range of **20.20.20.0/24** and a gateway of **20.20.20.1** on the host. (The NAT mode NICs are on a **10.0.2.0/24** network.)
+For VM-1, 1 NIC is in NAT mode used for Internet traffic and 2 NICs are in host-only adapter mode connected to _vboxnet1_. For VM-2, 1 NIC is in NAT mode and the other NIC is in host-only adapter mode also connected to _vboxnet1_. _vboxnet1_ should have a range of **20.20.20.0/24** and a gateway of **20.20.20.1** on the host. (The NAT mode NICs are on a **10.0.2.0/24** network.)
 
 In later experiment, we will start an MPTCP server program on VM-2 and have VM-1 connect to it via the 2 NICs connected to _vboxnet1_.
 
-## [Step 2] Install VM.
-In this step, we install the 2 VMs with Ubuntu server 20.04.1 LTS.
-
-After installation, remember to update & upgrade.
+Next, we install the 2 VMs with Ubuntu server 20.04.1 LTS. After installation, remember to update & upgrade.
 ```bash
 $ sudo apt update
 $ sudo apt upgrade
 ```
 
-## [Step 3] Compile and upgrade kernel.
+## [Step 2] Compile and upgrade kernel.
 We will be using 5.8.13 mainline kernel for the experiment since it contains MPTCP. All the following should be done on both VMs.
 
 First, some preparation needs to be done: install building environment.
@@ -63,7 +56,7 @@ $ sudo make install
 
 Reboot both VMs, they should be running a 5.8.13 kernel.
 
-## [Step 4] Configure VM IPs.
+## [Step 3] Configure VM IPs.
 As mentioned in **[Step 1]**, the NICs connected to _vboxnet1_ need to be assigned IP addresses. The 2 NICs of VM-1 are assigned **20.20.20.10** and **20.20.20.11**. The only NIC of VM-2 is assigned **20.20.20.20**. Below are the commands to set them.
 ```bash
 $ sudo vi /etc/netplan/00-installer-config.yaml
@@ -105,7 +98,7 @@ Save on exit and then run this command to apply the changes immediately.
 $ sudo netplan apply
 ```
 
-## [Step 5] Run experiment.
+## [Step 4] Run experiment.
 We will make use of the server/client application in [this github repo](https://github.com/shuoshuc/mptcp_experiments/blob/main/mptcp_app.cc) for our experiment. Please download the program to both VMs and compile it.
 ```bash
 $ g++ -o mptcp_app mptcp_app.cc
