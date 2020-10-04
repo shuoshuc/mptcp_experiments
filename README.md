@@ -149,4 +149,4 @@ $ ./mptcp_app server  # <-- on VM-2
 $ ./mptcp_app client 20.20.20.20  # <-- on VM-1
 ```
 
-Stop the program when there are sufficient packets captured by tcpdump. Then open _mptcp.pcap_ with [Wireshark](https://www.wireshark.org/) to analyze the trace.
+Stop the program when there are sufficient packets captured by tcpdump. Then open _mptcp.pcap_ with [Wireshark](https://www.wireshark.org/) to analyze the trace. Example trace can be found [here](https://github.com/shuoshuc/mptcp_experiments/blob/main/mptcp_2_subflows.pcap)
