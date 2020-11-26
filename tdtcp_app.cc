@@ -8,15 +8,19 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <errno.h>
 #include <iomanip>
 #include <iostream>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 #include <vector>
+
+#include "icmp.h"
 
 // A newly introduced setsockopt field on SOL_TCP. This avoids installing header
 // files from the specific custom kernel.
@@ -31,7 +35,7 @@ const int kCHUNKSIZE = 1024;
 // Prints the usage for this program then returns failure.
 void printHelpAndExit() {
   std::cout << R"(tdtcp_app usage:
-  If running in server mode: ./tdtcp_app server
+  If running in server mode: ./tdtcp_app server [client IP]
   If running in client mode: ./tdtcp_app client [server IP])"
             << std::endl;
   std::exit(EXIT_FAILURE);
@@ -58,10 +62,56 @@ int sendAll(int socket, std::vector<char> &buf) {
   return bytes_sent;
 }
 
-void receiveFromClient(int conn) {
+uint16_t icmp_checksum(const void* data, size_t len) {
+  auto p = reinterpret_cast<const uint16_t*>(data);
+  uint32_t sum = 0;
+  if (len & 1) {
+    // len is odd
+    sum = reinterpret_cast<const uint8_t*>(p)[len - 1];
+  }
+  len /= 2;
+  while (len--) {
+    sum += *p++;
+    if (sum & 0xffff0000) {
+      sum = (sum >> 16) + (sum & 0xffff);
+    }
+  }
+  return static_cast<uint16_t>(~sum);
+}
+
+void icmp_change_tdn(std::string client_addr, uint8_t tdn_id) {
+  // Opens a raw socket for sending ICMP to peer.
+  int icmp_sk = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+  if (icmp_sk < 0) {
+    printErrorAndExit("icmp_change_tdn() ICMP socket");
+  }
+
+  struct icmphdr icmph;
+  memset(&icmph, 0, sizeof(icmph));
+  const size_t icmph_size = 8;
+  icmph.type = ICMP_ACTIVE_TDN_ID;
+  icmph.code = 0;
+  icmph.checksum = 0;
+  icmph.un.active_tdn.id = tdn_id;
+  icmph.checksum = icmp_checksum(&icmph, icmph_size);
+
+  struct sockaddr_in dest_addr;
+  // Addr family must be the same as what is specified in the socket.
+  dest_addr.sin_family = AF_INET;
+  // We don't care about port number since this is an ICMP packet.
+  dest_addr.sin_port = 0;
+  dest_addr.sin_addr.s_addr = inet_addr(client_addr.c_str());
+  if (sendto(icmp_sk, &icmph, icmph_size, 0, (struct sockaddr*)&dest_addr,
+             sizeof(dest_addr)) < 0) {
+    printErrorAndExit("icmp_change_tdn() ICMP sendto()");
+  }
+}
+
+void receiveFromClient(int conn, std::string client_addr) {
   // Allocates a receive buffer that is twice the size of a chunk in case of
   // network delay or queueing.
   char recvbuf[2 * kCHUNKSIZE];
+  uint8_t tdn_id = 0;
   while (true) {
     int nbytes = read(conn, recvbuf, sizeof(recvbuf));
     if (nbytes < 0) {
@@ -76,6 +126,17 @@ void receiveFromClient(int conn) {
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
               << ": tdtcp_server received " << nbytes << " bytes." << std::endl;
+
+    // TDN ID alternates between 0 and 1.
+    tdn_id = tdn_id % 2;
+    // Send ICMP to peer to change TDN ID.
+    icmp_change_tdn(client_addr, tdn_id);
+    auto now2 =
+        std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::cout << std::put_time(std::localtime(&now2), "%D %T %Z")
+              << ": tdtcp_server sent ICMP ACTIVE_TDN_ID="
+	      << static_cast<int>(tdn_id) << " to client." << std::endl;
+    tdn_id++;
   }
   // Close connection on exit.
   close(conn);
@@ -100,13 +161,7 @@ int tdtcp_client(std::string ip_addr) {
 
   // Initializes a vector buffer of char, all filled with 'A'.
   std::vector<char> buf(kCHUNKSIZE, 'A');
-  int tdn = 0;
   while (true) {
-    // TDN ID alternates between 0 and 1.
-    tdn = tdn % 2;
-    int err = setsockopt(sfd, SOL_TCP, TCP_CURR_TDN_ID, &tdn, sizeof(tdn));
-    tdn++;
-
     if (sendAll(sfd, buf) != static_cast<int>(buf.size())) {
       printErrorAndExit("tdtcp_client sendAll()");
     }
@@ -123,8 +178,8 @@ int tdtcp_client(std::string ip_addr) {
 
 // tdtcp server that accepts connection from tdtcp client and receives data sent
 // over.
-int tdtcp_server() {
-  // Opens a socket for IPv4 Multipath TCP.
+int tdtcp_server(std::string client_addr) {
+  // Opens a socket for IPv4 TDTCP.
   int sfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sfd < 0) {
     printErrorAndExit("tdtcp_server socket");
@@ -151,16 +206,16 @@ int tdtcp_server() {
     if (conn < 0) {
       printErrorAndExit("tdtcp_server accept");
     }
-    receiveFromClient(conn);
+    receiveFromClient(conn, client_addr);
   }
 
   return 0;
 }
 
 int main(int argc, char *argv[]) {
-  // argument vector size should be at least 2 if server mode.
-  if (argc == 2 && std::string(argv[1]) == "server") {
-    return tdtcp_server();
+  // argument vector size should be at least 3 if server mode.
+  if (argc == 3 && std::string(argv[1]) == "server") {
+    return tdtcp_server(std::string(argv[2]));
   }
   // argument vector size should be at least 3 if client mode.
   if (argc == 3 && std::string(argv[1]) == "client") {
