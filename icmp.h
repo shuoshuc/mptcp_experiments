@@ -9,7 +9,7 @@
 
 #include <linux/types.h>
 
-#define ICMP_ACTIVE_TDN_ID	10	/* Active TDN ID change		*/
+#define ICMP_ACTIVE_TDN_ID	7	/* Active TDN ID change		*/
 
 struct icmphdr {
   __u8		type;
