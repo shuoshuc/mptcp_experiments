@@ -111,7 +111,8 @@ void receiveFromClient(int conn, std::string client_addr) {
   // Allocates a receive buffer that is twice the size of a chunk in case of
   // network delay or queueing.
   char recvbuf[2 * kCHUNKSIZE];
-  uint8_t tdn_id = 0;
+  uint8_t tdn_id = 1;
+  int count = 0;
   while (true) {
     int nbytes = read(conn, recvbuf, sizeof(recvbuf));
     if (nbytes < 0) {
@@ -127,16 +128,21 @@ void receiveFromClient(int conn, std::string client_addr) {
     std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
               << ": tdtcp_server received " << nbytes << " bytes." << std::endl;
 
-    // TDN ID alternates between 0 and 1.
-    tdn_id = tdn_id % 2;
-    // Send ICMP to peer to change TDN ID.
-    icmp_change_tdn(client_addr, tdn_id);
-    auto now2 =
+    if (count >= 200) {
+      count = 0;
+    }
+    if (count / 100 != tdn_id) {
+      // TDN ID alternates between 0 and 1.
+      tdn_id = count / 100;
+      // Send ICMP to peer to change TDN ID.
+      icmp_change_tdn(client_addr, tdn_id);
+      auto now2 =
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::cout << std::put_time(std::localtime(&now2), "%D %T %Z")
-              << ": tdtcp_server sent ICMP ACTIVE_TDN_ID="
-	      << static_cast<int>(tdn_id) << " to client." << std::endl;
-    tdn_id++;
+      std::cout << std::put_time(std::localtime(&now2), "%D %T %Z")
+                << ": tdtcp_server sent ICMP ACTIVE_TDN_ID="
+                << static_cast<int>(tdn_id) << " to client." << std::endl;
+    }
+    count++;
   }
   // Close connection on exit.
   close(conn);
