@@ -108,6 +108,7 @@ void icmp_change_tdn(std::string client_addr, uint8_t tdn_id) {
              sizeof(dest_addr)) < 0) {
     printErrorAndExit("icmp_change_tdn() ICMP sendto()");
   }
+  close(icmp_sk);
 }
 
 void receiveFromClient(int conn, std::string client_addr) {
