@@ -32,6 +32,9 @@ const int kPORT = 9100;
 // Size of a single chunk to send.
 const int kCHUNKSIZE = 1024;
 
+// ICMP changes every kICMPInterval number of receiving chunks.
+const int kICMPInterval = 50;
+
 // Prints the usage for this program then returns failure.
 void printHelpAndExit() {
   std::cout << R"(tdtcp_app usage:
@@ -110,7 +113,7 @@ void icmp_change_tdn(std::string client_addr, uint8_t tdn_id) {
 void receiveFromClient(int conn, std::string client_addr) {
   // Allocates a receive buffer that is twice the size of a chunk in case of
   // network delay or queueing.
-  char recvbuf[2 * kCHUNKSIZE];
+  char recvbuf[kCHUNKSIZE];
   uint8_t tdn_id = 1;
   int count = 0;
   while (true) {
@@ -128,12 +131,12 @@ void receiveFromClient(int conn, std::string client_addr) {
     std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
               << ": tdtcp_server received " << nbytes << " bytes." << std::endl;
 
-    if (count >= 200) {
+    if (count >= 2 * kICMPInterval) {
       count = 0;
     }
-    if (count / 100 != tdn_id) {
+    if (count / kICMPInterval != tdn_id) {
       // TDN ID alternates between 0 and 1.
-      tdn_id = count / 100;
+      tdn_id = count / kICMPInterval;
       // Send ICMP to peer to change TDN ID.
       icmp_change_tdn(client_addr, tdn_id);
       auto now2 =
