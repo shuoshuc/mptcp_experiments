@@ -4,23 +4,24 @@
  * Shawn Chen <shuoshuc@cs.cmu.edu>
  */
 
+#include "icmp.h"
+
 #include <arpa/inet.h>
-#include <chrono>
-#include <cstdlib>
-#include <cstring>
 #include <errno.h>
-#include <iomanip>
-#include <iostream>
 #include <netdb.h>
-#include <netinet/tcp.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <thread>
 #include <vector>
-
-#include "icmp.h"
 
 // A newly introduced setsockopt field on SOL_TCP. This avoids installing header
 // files from the specific custom kernel.
@@ -32,8 +33,8 @@ const int kPORT = 9100;
 // Size of a single chunk to send.
 const int kCHUNKSIZE = 1024;
 
-// ICMP changes every kICMPInterval number of receiving chunks.
-const int kICMPInterval = 50;
+// ICMP TDN change interval in seconds.
+const int kICMPInterval = 3;
 
 // Prints the usage for this program then returns failure.
 void printHelpAndExit() {
@@ -116,12 +117,30 @@ void icmp_change_tdn(std::string client_addr, uint8_t tdn_id) {
   close(icmp_sk);
 }
 
+// Sleeps and sends out ICMP packets periodically.
+void icmp_timer(std::string client_addr) {
+  uint8_t tdn_id = 1;
+
+  while (true) {
+    // Sleeps for 2 sec.
+    sleep(kICMPInterval);
+
+    // TDN ID alternates between 0 and 1.
+    tdn_id = 1 - tdn_id;
+    // Send ICMP to peer to change TDN ID.
+    icmp_change_tdn(client_addr, tdn_id);
+    auto now =
+      std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
+              << ": sent ICMP ACTIVE_TDN_ID=" << static_cast<int>(tdn_id)
+              << " to " << client_addr << std::endl;
+  }
+}
+
 void receiveFromClient(int conn, std::string client_addr) {
   // Allocates a receive buffer that is twice the size of a chunk in case of
   // network delay or queueing.
   char recvbuf[kCHUNKSIZE];
-  uint8_t tdn_id = 1;
-  int count = 0;
   while (true) {
     int nbytes = read(conn, recvbuf, sizeof(recvbuf));
     if (nbytes < 0) {
@@ -136,22 +155,6 @@ void receiveFromClient(int conn, std::string client_addr) {
         std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
               << ": tdtcp_server received " << nbytes << " bytes." << std::endl;
-
-    if (count >= 2 * kICMPInterval) {
-      count = 0;
-    }
-    if (count / kICMPInterval != tdn_id) {
-      // TDN ID alternates between 0 and 1.
-      tdn_id = count / kICMPInterval;
-      // Send ICMP to peer to change TDN ID.
-      icmp_change_tdn(client_addr, tdn_id);
-      auto now2 =
-        std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-      std::cout << std::put_time(std::localtime(&now2), "%D %T %Z")
-                << ": tdtcp_server sent ICMP ACTIVE_TDN_ID="
-                << static_cast<int>(tdn_id) << " to client." << std::endl;
-    }
-    count++;
   }
 }
 
@@ -234,7 +237,10 @@ int tdtcp_server(std::string client_addr) {
 int main(int argc, char *argv[]) {
   // argument vector size should be at least 3 if server mode.
   if (argc == 3 && std::string(argv[1]) == "server") {
-    return tdtcp_server(std::string(argv[2]));
+    std::thread t(icmp_timer, std::string(argv[2]));
+    tdtcp_server(std::string(argv[2]));
+    t.join();
+    return 0;
   }
   // argument vector size should be at least 3 if client mode.
   if (argc == 3 && std::string(argv[1]) == "client") {
