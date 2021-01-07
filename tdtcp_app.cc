@@ -50,6 +50,11 @@ void printErrorAndExit(std::string err) {
   std::exit(EXIT_FAILURE);
 }
 
+// Prints the error code but does not exit.
+void printError(std::string err) {
+  std::perror(err.c_str());
+}
+
 int sendAll(int socket, std::vector<char> &buf) {
   int bytes_sent = 0, nbytes = 0;
   size_t bytes_left = buf.size();
@@ -106,7 +111,7 @@ void icmp_change_tdn(std::string client_addr, uint8_t tdn_id) {
   dest_addr.sin_addr.s_addr = inet_addr(client_addr.c_str());
   if (sendto(icmp_sk, &icmph, icmph_size, 0, (struct sockaddr*)&dest_addr,
              sizeof(dest_addr)) < 0) {
-    printErrorAndExit("icmp_change_tdn() ICMP sendto()");
+    printError("icmp_change_tdn() ICMP sendto()");
   }
   close(icmp_sk);
 }
@@ -148,8 +153,6 @@ void receiveFromClient(int conn, std::string client_addr) {
     }
     count++;
   }
-  // Close connection on exit.
-  close(conn);
 }
 
 // tdtcp client that sends chunks of data to tdtcp server with fixed intervals.
@@ -166,6 +169,7 @@ int tdtcp_client(std::string ip_addr) {
     printErrorAndExit("tdtcp_client socket()");
   }
   if (connect(sfd, addr->ai_addr, addr->ai_addrlen) != 0) {
+    close(sfd);
     printErrorAndExit("tdtcp_client connect()");
   }
 
@@ -173,6 +177,7 @@ int tdtcp_client(std::string ip_addr) {
   std::vector<char> buf(kCHUNKSIZE, 'A');
   while (true) {
     if (sendAll(sfd, buf) != static_cast<int>(buf.size())) {
+      close(sfd);
       printErrorAndExit("tdtcp_client sendAll()");
     }
     auto now =
@@ -202,10 +207,12 @@ int tdtcp_server(std::string client_addr) {
   // binds to fixed port kPORT.
   sa.sin_port = htons(kPORT);
   if (bind(sfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    close(sfd);
     printErrorAndExit("tdtcp_server bind");
   }
   // Allows up to 5 backlog connections. Connections after 5 will be refused.
   if (listen(sfd, 5) != 0) {
+    close(sfd);
     printErrorAndExit("tdtcp_server listen");
   }
 
@@ -217,6 +224,8 @@ int tdtcp_server(std::string client_addr) {
       printErrorAndExit("tdtcp_server accept");
     }
     receiveFromClient(conn, client_addr);
+    // Close connection on exit.
+    close(conn);
   }
 
   return 0;
