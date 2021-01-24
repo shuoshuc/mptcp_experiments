@@ -31,10 +31,10 @@
 const int kPORT = 9100;
 
 // Size of a single chunk to send.
-const int kCHUNKSIZE = 1024;
+const int kCHUNKSIZE = 1024 * 500;
 
-// ICMP TDN change interval in seconds.
-const int kICMPInterval = 3;
+// ICMP TDN change interval in microseconds.
+const double kICMPInterval = 3 * 1000000;
 
 // Prints the usage for this program then returns failure.
 void printHelpAndExit() {
@@ -122,8 +122,8 @@ void icmp_timer(std::string client_addr) {
   uint8_t tdn_id = 1;
 
   while (true) {
-    // Sleeps for 2 sec.
-    sleep(kICMPInterval);
+    // Sleeps for `interval` microseconds.
+    usleep(kICMPInterval);
 
     // TDN ID alternates between 0 and 1.
     tdn_id = 1 - tdn_id;
@@ -188,7 +188,7 @@ int tdtcp_client(std::string ip_addr) {
     std::cout << std::put_time(std::localtime(&now), "%D %T %Z")
               << ": tdtcp_client sent " << buf.size() << " bytes." << std::endl;
     // Sleeps for 1 sec.
-    sleep(1);
+    usleep(1 * 1000000);
   }
 
   return 0;
